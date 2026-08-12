@@ -1,7 +1,7 @@
 const WMO = {
   0: { label: "آسمان صاف", icon: "☀️" },
   1: { label: "عمدتاً صاف", icon: "🌤️" },
-  2: { label: "نیمهابری", icon: "⛅" },
+  2: { label: "نیمه‌ابری", icon: "⛅" },
   3: { label: "ابری", icon: "☁️" },
   45: { label: "مه", icon: "🌫️" },
   48: { label: "مه یخزده", icon: "🌫️" },
@@ -18,7 +18,7 @@ const WMO = {
   71: { label: "برف خفیف", icon: "🌨️" },
   73: { label: "برف متوسط", icon: "🌨️" },
   75: { label: "برف شدید", icon: "❄️" },
-  77: { label: "دانههای برف", icon: "❄️" },
+  77: { label: "دانه‌های برف", icon: "❄️" },
   80: { label: "رگبار خفیف", icon: "🌦️" },
   81: { label: "رگبار متوسط", icon: "🌧️" },
   82: { label: "رگبار شدید", icon: "⛈️" },
@@ -29,7 +29,7 @@ const WMO = {
   99: { label: "رعد و برق با تگرگ شدید", icon: "⛈️" },
 };
 
-const WEEKDAYS = ["یکشنبه", "دوشنبه", "سهشنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه"];
+const WEEKDAYS = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه", "جمعه", "شنبه"];
 
 const els = {
   statusCard: document.getElementById("location-status"),
@@ -53,9 +53,22 @@ const els = {
   forecastList: document.getElementById("forecast-list"),
   errorTitle: document.getElementById("error-title"),
   errorDesc: document.getElementById("error-desc"),
+  notifyCard: document.getElementById("notify-card"),
+  notifyToggle: document.getElementById("notify-toggle"),
+  notifyDesc: document.getElementById("notify-desc"),
 };
 
+const VAPID_PUBLIC_KEY = "BFI_DWXbqDRLCiE9CfP6vyv90UPZEeijyoOvQV0lxb36A2u4S7VXAO0Pb8mIodcrsbcOvUEJayDENqL5aSBHOgc";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
 let lastCoords = null;
+let lastPlaceName = null;
 
 function show(el) {
   el.classList.remove("hidden");
@@ -97,13 +110,6 @@ function formatDay(dateStr) {
 async function reverseGeocode(lat, lon) {
   try {
     const res = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=&count=1&language=fa&format=json&latitude=${lat}&longitude=${lon}`
-    );
-    // Open-Meteo reverse via Nominatim-style fallback
-  } catch (_) {}
-
-  try {
-    const res = await fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=fa`
     );
     if (!res.ok) throw new Error("geocode failed");
@@ -117,8 +123,23 @@ async function reverseGeocode(lat, lon) {
 
 async function fetchWeather(lat, lon) {
   const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
-  if (!res.ok) throw new Error("خطا در دریافت اطلاعات آبوهوا");
+  if (!res.ok) throw new Error("خطا در دریافت اطلاعات آب‌وهوا");
   return res.json();
+}
+
+function animateNumber(el, target) {
+  const start = Number(el.textContent) || 0;
+  const duration = 500;
+  const startTime = performance.now();
+
+  function tick(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(start + (target - start) * eased);
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+
+  requestAnimationFrame(tick);
 }
 
 function renderWeather(data, placeName, lat, lon) {
@@ -128,7 +149,7 @@ function renderWeather(data, placeName, lat, lon) {
 
   els.cityName.textContent = placeName;
   els.coordinates.textContent = `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
-  els.temperature.textContent = Math.round(current.temperature_2m);
+  animateNumber(els.temperature, Math.round(current.temperature_2m));
   els.weatherDesc.textContent = info.label;
   els.weatherIcon.textContent = info.icon;
   els.feelsLike.textContent = `${Math.round(current.apparent_temperature)}°C`;
@@ -142,6 +163,7 @@ function renderWeather(data, placeName, lat, lon) {
     const dayInfo = weatherInfo(daily.weather_code[i]);
     const item = document.createElement("div");
     item.className = "forecast-item";
+    item.style.animationDelay = `${i * 0.06}s`;
     item.innerHTML = `
       <span class="forecast-day">${formatDay(daily.time[i])}</span>
       <span class="forecast-icon">${dayInfo.icon}</span>
@@ -153,13 +175,15 @@ function renderWeather(data, placeName, lat, lon) {
     els.forecastList.appendChild(item);
   }
 
+  if (pushSupported) show(els.notifyCard);
+
   hide(els.statusCard);
   hide(els.errorCard);
   show(els.weatherCard);
 }
 
 async function loadWeather(lat, lon) {
-  setStatus("در حال دریافت آبوهوا...", "لطفاً صبر کنید", "⏳");
+  setStatus("در حال دریافت آب‌وهوا...", "لطفاً صبر کنید", "⏳");
   show(els.statusCard);
   hide(els.weatherCard);
   hide(els.errorCard);
@@ -171,9 +195,10 @@ async function loadWeather(lat, lon) {
       reverseGeocode(lat, lon),
     ]);
     lastCoords = { lat, lon };
+    lastPlaceName = placeName;
     renderWeather(weather, placeName, lat, lon);
   } catch (err) {
-    showError("خطا در دریافت آبوهوا", err.message || "لطفاً دوباره تلاش کنید");
+    showError("خطا در دریافت آب‌وهوا", err.message || "لطفاً دوباره تلاش کنید");
   } finally {
     els.getLocationBtn.disabled = false;
   }
@@ -181,7 +206,7 @@ async function loadWeather(lat, lon) {
 
 function requestLocation() {
   if (!navigator.geolocation) {
-    showError("پشتیبانی نمیشود", "مرورگر شما از GPS پشتیبانی نمیکند");
+    showError("پشتیبانی نمی‌شود", "مرورگر شما از GPS پشتیبانی نمی‌کند");
     return;
   }
 
@@ -206,6 +231,96 @@ function requestLocation() {
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
   );
+}
+
+const themeToggleBtn = document.getElementById("theme-toggle-btn");
+const themeColorMeta = document.getElementById("theme-color-meta");
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  themeToggleBtn.innerHTML = `<span class="icon-swap">${theme === "dark" ? "☀️" : "🌙"}</span>`;
+  if (themeColorMeta) themeColorMeta.content = theme === "dark" ? "#0f1420" : "#4a90e2";
+  localStorage.setItem("theme", theme);
+}
+
+applyTheme(document.documentElement.getAttribute("data-theme") || "light");
+
+themeToggleBtn.addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme");
+  applyTheme(current === "dark" ? "light" : "dark");
+});
+
+const pushSupported = "serviceWorker" in navigator && "PushManager" in window;
+
+async function syncNotifyToggle() {
+  if (!pushSupported) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    els.notifyToggle.checked = !!sub;
+  } catch (_) {}
+}
+
+async function enableNotifications() {
+  if (!lastCoords) {
+    els.notifyToggle.checked = false;
+    return;
+  }
+  if (Notification.permission === "denied") {
+    els.notifyToggle.checked = false;
+    els.notifyDesc.textContent = "دسترسی اعلان مسدود است. از تنظیمات مرورگر اجازه دهید.";
+    return;
+  }
+
+  const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+  if (permission !== "granted") {
+    els.notifyToggle.checked = false;
+    return;
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) await existing.unsubscribe();
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub.toJSON(), lat: lastCoords.lat, lon: lastCoords.lon, city: lastPlaceName })
+    });
+    els.notifyDesc.textContent = "هر چند ساعت دمای فعلی رو به‌صورت اعلان دریافت می‌کنی";
+  } catch (err) {
+    els.notifyToggle.checked = false;
+    els.notifyDesc.textContent = "فعال‌سازی اعلان با خطا مواجه شد";
+  }
+}
+
+async function disableNotifications() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await fetch("/api/push/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint })
+      });
+      await sub.unsubscribe();
+    }
+  } catch (_) {}
+  els.notifyDesc.textContent = "هر چند ساعت دمای فعلی رو به‌صورت اعلان دریافت کن";
+}
+
+if (pushSupported) {
+  els.notifyToggle.addEventListener("change", () => {
+    if (els.notifyToggle.checked) enableNotifications();
+    else disableNotifications();
+  });
+  syncNotifyToggle();
 }
 
 els.getLocationBtn.addEventListener("click", requestLocation);

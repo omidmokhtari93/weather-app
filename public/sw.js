@@ -1,4 +1,4 @@
-const CACHE_NAME = 'weather-app-v1';
+const CACHE_NAME = 'weather-app-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -82,7 +82,15 @@ self.addEventListener('fetch', (event) => {
 
   if (request.method !== 'GET') return;
 
+  const isAppShell = request.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname === '/index.html' ||
+    url.pathname === '/app.js' ||
+    url.pathname === '/style.css';
+
   if (url.pathname.startsWith('/api/') || url.hostname.includes('open-meteo') || url.hostname.includes('bigdatacloud') || url.hostname.includes('geocoding-api')) {
+    event.respondWith(networkFirst(request));
+  } else if (isAppShell) {
     event.respondWith(networkFirst(request));
   } else if (url.href.includes('vazirmatn')) {
     event.respondWith(cacheFirst(request));
@@ -95,4 +103,38 @@ self.addEventListener('message', (event) => {
   if (event.data === 'skipWaiting') {
     self.skipWaiting();
   }
+});
+
+self.addEventListener('push', (event) => {
+  let payload = { title: 'آب و هوای من', body: 'به‌روزرسانی آب و هوا در دسترس است.' };
+  try {
+    if (event.data) payload = event.data.json();
+  } catch (err) {
+    console.warn('Push payload parse failed:', err);
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/icons/icon-192.svg',
+      badge: '/icons/icon-96.svg',
+      dir: 'rtl',
+      lang: 'fa',
+      data: { url: '/' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(targetUrl) && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(targetUrl);
+    })
+  );
 });

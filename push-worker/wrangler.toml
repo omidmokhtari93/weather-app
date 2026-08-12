@@ -1,0 +1,16 @@
+name = "weather-app-push-cron"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+preview_urls = false
+
+[triggers]
+crons = ["0 */3 * * *"]
+
+[[kv_namespaces]]
+binding = "PUSH_SUBS"
+id = "70da165896b54d8090ff950d8322c3a6"
+
+[vars]
+VAPID_PUBLIC_KEY = "BFI_DWXbqDRLCiE9CfP6vyv90UPZEeijyoOvQV0lxb36A2u4S7VXAO0Pb8mIodcrsbcOvUEJayDENqL5aSBHOgc"
+VAPID_SUBJECT = "mailto:omidmokhtari93@gmail.com"
