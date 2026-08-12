@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Wrangler
+.wrangler/
+
+# Generated
+generate-icons.js
+
+# Test
+coverage/
+.nyc_output/
+
+# Cache
+.cache/
