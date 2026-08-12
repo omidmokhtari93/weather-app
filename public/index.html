@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="آب و هوا">
+  <meta name="theme-color" content="#4a90e2">
+  <meta name="description" content="نمایش آب و هوای لحظه‌ای و پیش‌بینی ۷ روزه با استفاده از موقعیت مکانی">
+  <title>آب و هوای من</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="msapplication-TileColor" content="#4a90e2">
+  <meta name="msapplication-TileImage" content="icons/icon-144.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🌤️ آب و هوای منطقه من</h1>
+      <p class="subtitle">موقعیت مکانی خود را برای دریافت آب و هوای دقیق فعال کنید</p>
+    </header>
+
+    <main>
+      <div id="location-status" class="status-card">
+        <div class="status-icon" id="status-icon">📍</div>
+        <div class="status-text">
+          <p id="status-title">در انتظار دسترسی به موقعیت مکانی...</p>
+          <p id="status-desc" class="muted">روی دکمه زیر بزنید تا موقعیت شما شناسایی شود</p>
+        </div>
+        <button id="get-location-btn" class="btn primary" disabled>
+          فعال کردن GPS
+        </button>
+      </div>
+
+      <div id="weather-card" class="weather-card hidden">
+        <div class="weather-header">
+          <div class="location-info">
+            <h2 id="city-name">شهر شما</h2>
+            <p id="coordinates" class="muted"></p>
+          </div>
+          <button id="refresh-btn" class="btn secondary" title="به‌روزرسانی">🔄</button>
+        </div>
+
+        <div class="current-weather">
+          <div class="temp-main">
+            <span id="temperature">--</span><span class="unit">°C</span>
+          </div>
+          <div class="weather-description" id="weather-desc">--</div>
+          <div class="weather-icon" id="weather-icon">☁️</div>
+        </div>
+
+        <div class="details-grid">
+          <div class="detail-item">
+            <span class="detail-label">احساس می‌شود</span>
+            <span class="detail-value" id="feels-like">--°C</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">رطوبت</span>
+            <span class="detail-value" id="humidity">--%</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">باد</span>
+            <span class="detail-value" id="wind">-- km/h</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">فشار</span>
+            <span class="detail-value" id="pressure">-- hPa</span>
+          </div>
+        </div>
+
+        <div class="daily-forecast" id="daily-forecast">
+          <h3>پیش‌بینی ۷ روزه</h3>
+          <div class="forecast-list" id="forecast-list"></div>
+        </div>
+      </div>
+
+      <div id="error-card" class="status-card error hidden">
+        <div class="status-icon">⚠️</div>
+        <div class="status-text">
+          <p id="error-title">خطا</p>
+          <p id="error-desc" class="muted"></p>
+        </div>
+        <button id="retry-btn" class="btn primary">تلاش مجدد</button>
+      </div>
+
+      <div id="install-prompt" class="install-prompt hidden">
+        <div class="install-content">
+          <span class="install-icon">📱</span>
+          <div class="install-text">
+            <p class="install-title">نصب برنامه</p>
+            <p class="install-desc">برای دسترسی آفلاین و تجربه بهتر، برنامه را نصب کنید</p>
+          </div>
+          <button id="install-btn" class="btn primary">نصب</button>
+          <button id="dismiss-btn" class="btn ghost">بعداً</button>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <p>داده‌ها از <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> | موقعیت مکانی از مرورگر شما</p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+  <script>
+    // PWA Install Prompt
+    let deferredPrompt = null;
+    const installPrompt = document.getElementById('install-prompt');
+    const installBtn = document.getElementById('install-btn');
+    const dismissBtn = document.getElementById('dismiss-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installPrompt.classList.remove('hidden');
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        console.log('User accepted install');
+      }
+      deferredPrompt = null;
+      installPrompt.classList.add('hidden');
+    });
+
+    dismissBtn.addEventListener('click', () => {
+      installPrompt.classList.add('hidden');
+      deferredPrompt = null;
+    });
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => {
+            console.log('SW registered:', reg.scope);
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  if (confirm('نسخه جدید برنامه موجود است. به‌روزرسانی شود؟')) {
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          })
+          .catch((err) => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
