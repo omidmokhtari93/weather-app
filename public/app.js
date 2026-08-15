@@ -41,6 +41,7 @@ const els = {
   getLocationBtn: document.getElementById("get-location-btn"),
   refreshBtn: document.getElementById("refresh-btn"),
   retryBtn: document.getElementById("retry-btn"),
+  changeCityBtn: document.getElementById("change-city-btn"),
   cityName: document.getElementById("city-name"),
   coordinates: document.getElementById("coordinates"),
   temperature: document.getElementById("temperature"),
@@ -69,6 +70,29 @@ function urlBase64ToUint8Array(base64String) {
 
 let lastCoords = null;
 let lastPlaceName = null;
+
+const STORAGE_KEY = "weather-last-location";
+
+function loadSavedLocation() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data.lat && data.lon && data.placeName) {
+        lastCoords = { lat: data.lat, lon: data.lon };
+        lastPlaceName = data.placeName;
+        return true;
+      }
+    }
+  } catch (_) {}
+  return false;
+}
+
+function saveLocation(lat, lon, placeName) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ lat, lon, placeName }));
+  } catch (_) {}
+}
 
 function show(el) {
   el.classList.remove("hidden");
@@ -182,8 +206,8 @@ function renderWeather(data, placeName, lat, lon) {
   show(els.weatherCard);
 }
 
-async function loadWeather(lat, lon) {
-  setStatus("در حال دریافت آب‌وهوا...", "لطفاً صبر کنید", "⏳");
+async function loadWeather(lat, lon, knownPlaceName) {
+  setStatus("در حال دریافت آبوهوا...", "لطفاً صبر کنید", "⏳");
   show(els.statusCard);
   hide(els.weatherCard);
   hide(els.errorCard);
@@ -192,13 +216,14 @@ async function loadWeather(lat, lon) {
   try {
     const [weather, placeName] = await Promise.all([
       fetchWeather(lat, lon),
-      reverseGeocode(lat, lon),
+      knownPlaceName ? Promise.resolve(knownPlaceName) : reverseGeocode(lat, lon),
     ]);
     lastCoords = { lat, lon };
     lastPlaceName = placeName;
+    saveLocation(lat, lon, placeName);
     renderWeather(weather, placeName, lat, lon);
   } catch (err) {
-    showError("خطا در دریافت آب‌وهوا", err.message || "لطفاً دوباره تلاش کنید");
+    showError("خطا در دریافت آبوهوا", err.message || "لطفاً دوباره تلاش کنید");
   } finally {
     els.getLocationBtn.disabled = false;
   }
@@ -229,8 +254,12 @@ function requestLocation() {
       if (err.code === 3) msg = "زمان درخواست موقعیت تمام شد";
       showError("خطای موقعیت مکانی", msg);
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
   );
+}
+
+function changeCity() {
+  requestLocation();
 }
 
 const themeToggleBtn = document.getElementById("theme-toggle-btn");
@@ -325,21 +354,28 @@ if (pushSupported) {
 
 els.getLocationBtn.addEventListener("click", requestLocation);
 els.retryBtn.addEventListener("click", () => {
-  if (lastCoords) loadWeather(lastCoords.lat, lastCoords.lon);
+  if (lastCoords) loadWeather(lastCoords.lat, lastCoords.lon, lastPlaceName);
   else requestLocation();
 });
 els.refreshBtn.addEventListener("click", () => {
-  if (lastCoords) loadWeather(lastCoords.lat, lastCoords.lon);
+  if (lastCoords) loadWeather(lastCoords.lat, lastCoords.lon, lastPlaceName);
   else requestLocation();
 });
+if (els.changeCityBtn) els.changeCityBtn.addEventListener("click", changeCity);
 
 // Enable button after page load
 els.getLocationBtn.disabled = false;
-setStatus("آماده", "روی دکمه زیر بزنید تا موقعیت شما شناسایی شود", "📍");
+
+if (loadSavedLocation()) {
+  setStatus("موقعیت ذخیره شده", lastPlaceName, "📍");
+  loadWeather(lastCoords.lat, lastCoords.lon, lastPlaceName);
+} else {
+  setStatus("آماده", "روی دکمه زیر بزنید تا موقعیت شما شناسایی شود", "📍");
+}
 
 // Auto-request if permission already granted
 if (navigator.permissions) {
   navigator.permissions.query({ name: "geolocation" }).then((result) => {
-    if (result.state === "granted") requestLocation();
+    if (result.state === "granted" && !lastCoords) requestLocation();
   }).catch(() => {});
 }

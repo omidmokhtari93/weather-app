@@ -282,6 +282,11 @@ header h1 {
   margin-bottom: 0.5rem;
 }
 
+.header-buttons {
+  display: flex;
+  gap: 0.4rem;
+}
+
 .weather-header h2 {
   font-size: 1.25rem;
   margin-bottom: 0.25rem;
