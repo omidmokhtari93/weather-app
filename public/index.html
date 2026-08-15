@@ -62,6 +62,20 @@
             </div>
           </div>
 
+          <div class="city-selector" id="city-selector">
+            <div class="city-dropdown-wrapper">
+              <select id="city-dropdown" class="city-dropdown" aria-label="انتخاب شهر ذخیره شده">
+                <option value="">شهرها را انتخاب کنید</option>
+              </select>
+              <button id="remove-city-btn" class="btn ghost small" title="حذف شهر" aria-label="حذف شهر انتخاب شده">✕</button>
+              <button id="search-city-btn" class="btn secondary small" title="جستجوی شهر" aria-label="جستجوی شهر">🔍</button>
+            </div>
+            <div class="city-search-wrapper hidden" id="city-search-wrapper">
+              <input type="text" id="city-search-input" class="city-search-input" placeholder="جستجوی شهر (مثل: تهران، لندن، نیویورک)..." aria-label="جستجوی شهر">
+              <div id="city-search-results" class="city-search-results hidden"></div>
+            </div>
+          </div>
+
           <div class="current-weather">
             <div class="weather-icon" id="weather-icon">☁️</div>
             <div class="temp-main">

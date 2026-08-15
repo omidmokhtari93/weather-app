@@ -57,6 +57,12 @@ const els = {
   notifyCard: document.getElementById("notify-card"),
   notifyToggle: document.getElementById("notify-toggle"),
   notifyDesc: document.getElementById("notify-desc"),
+  cityDropdown: document.getElementById("city-dropdown"),
+  citySearchInput: document.getElementById("city-search-input"),
+  citySearchResults: document.getElementById("city-search-results"),
+  citySearchWrapper: document.getElementById("city-search-wrapper"),
+  searchCityBtn: document.getElementById("search-city-btn"),
+  removeCityBtn: document.getElementById("remove-city-btn"),
 };
 
 const VAPID_PUBLIC_KEY = "BFI_DWXbqDRLCiE9CfP6vyv90UPZEeijyoOvQV0lxb36A2u4S7VXAO0Pb8mIodcrsbcOvUEJayDENqL5aSBHOgc";
@@ -72,6 +78,7 @@ let lastCoords = null;
 let lastPlaceName = null;
 
 const STORAGE_KEY = "weather-last-location";
+const CITIES_KEY = "weather-saved-cities";
 
 function loadSavedLocation() {
   try {
@@ -91,7 +98,83 @@ function loadSavedLocation() {
 function saveLocation(lat, lon, placeName) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ lat, lon, placeName }));
+    addCityToSaved({ lat, lon, placeName });
   } catch (_) {}
+}
+
+function addCityToSaved(city) {
+  try {
+    const saved = localStorage.getItem(CITIES_KEY);
+    const cities = saved ? JSON.parse(saved) : [];
+    const exists = cities.some(c => c.lat === city.lat && c.lon === city.lon);
+    if (!exists) {
+      cities.unshift(city);
+      if (cities.length > 10) cities.pop();
+      localStorage.setItem(CITIES_KEY, JSON.stringify(cities));
+    }
+    updateCityDropdown();
+  } catch (_) {}
+}
+
+function getSavedCities() {
+  try {
+    const saved = localStorage.getItem(CITIES_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function removeCityFromSaved(lat, lon) {
+  try {
+    const saved = localStorage.getItem(CITIES_KEY);
+    const cities = saved ? JSON.parse(saved) : [];
+    const filtered = cities.filter(c => c.lat !== lat || c.lon !== lon);
+    localStorage.setItem(CITIES_KEY, JSON.stringify(filtered));
+    updateCityDropdown();
+  } catch (_) {}
+}
+
+async function searchCities(query) {
+  if (!query || query.length < 2) return [];
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=fa&format=json`);
+    if (!res.ok) throw new Error("Search failed");
+    const data = await res.json();
+    return (data.results || []).map(r => ({
+      lat: r.latitude,
+      lon: r.longitude,
+      placeName: [r.name, r.admin1, r.country].filter(Boolean).join("، ")
+    }));
+  } catch (_) {
+    return [];
+  }
+}
+
+function updateCityDropdown() {
+  const dropdown = document.getElementById("city-dropdown");
+  const searchResults = document.getElementById("city-search-results");
+  if (!dropdown || !searchResults) return;
+
+  const cities = getSavedCities();
+  dropdown.innerHTML = "";
+
+  if (cities.length === 0) {
+    dropdown.innerHTML = '<option value="">هیچ شهر ذخیره شده‌ای نیست</option>';
+    return;
+  }
+
+  cities.forEach((city, index) => {
+    const option = document.createElement("option");
+    option.value = index;
+    option.textContent = city.placeName;
+    dropdown.appendChild(option);
+  });
+
+  if (lastCoords) {
+    const currentIndex = cities.findIndex(c => c.lat === lastCoords.lat && c.lon === lastCoords.lon);
+    if (currentIndex !== -1) dropdown.value = currentIndex;
+  }
 }
 
 function show(el) {
@@ -363,8 +446,86 @@ els.refreshBtn.addEventListener("click", () => {
 });
 if (els.changeCityBtn) els.changeCityBtn.addEventListener("click", changeCity);
 
+let citySearchDebounce = null;
+els.citySearchInput.addEventListener("input", (e) => {
+  clearTimeout(citySearchDebounce);
+  const query = e.target.value.trim();
+  if (query.length < 2) {
+    els.citySearchResults.innerHTML = "";
+    els.citySearchResults.classList.add("hidden");
+    return;
+  }
+  citySearchDebounce = setTimeout(async () => {
+    const results = await searchCities(query);
+    if (results.length === 0) {
+      els.citySearchResults.innerHTML = '<div class="city-search-item">شهر یافت نشد</div>';
+    } else {
+      els.citySearchResults.innerHTML = results.map((city, i) =>
+        `<div class="city-search-item" data-index="${i}" data-lat="${city.lat}" data-lon="${city.lon}">${city.placeName}</div>`
+      ).join("");
+      els.citySearchResults.querySelectorAll(".city-search-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const lat = parseFloat(item.dataset.lat);
+          const lon = parseFloat(item.dataset.lon);
+          const placeName = item.textContent;
+          loadWeather(lat, lon, placeName);
+          els.citySearchInput.value = "";
+          els.citySearchResults.classList.add("hidden");
+          els.citySearchWrapper.classList.add("hidden");
+        });
+      });
+    }
+    els.citySearchResults.classList.remove("hidden");
+  }, 200);
+});
+
+els.citySearchInput.addEventListener("blur", () => {
+  setTimeout(() => {
+    els.citySearchResults.classList.add("hidden");
+  }, 200);
+});
+
+if (els.searchCityBtn) {
+  els.searchCityBtn.addEventListener("click", () => {
+    els.citySearchWrapper.classList.toggle("hidden");
+    if (!els.citySearchWrapper.classList.contains("hidden")) {
+      els.citySearchInput.focus();
+    }
+  });
+}
+
+els.cityDropdown.addEventListener("change", (e) => {
+  const index = parseInt(e.target.value);
+  if (isNaN(index)) return;
+  const cities = getSavedCities();
+  const city = cities[index];
+  if (city) {
+    loadWeather(city.lat, city.lon, city.placeName);
+  }
+});
+
+if (els.removeCityBtn) {
+  els.removeCityBtn.addEventListener("click", () => {
+    const index = parseInt(els.cityDropdown.value);
+    if (isNaN(index)) return;
+    const cities = getSavedCities();
+    const city = cities[index];
+    if (city) {
+      removeCityFromSaved(city.lat, city.lon);
+      if (lastCoords && lastCoords.lat === city.lat && lastCoords.lon === city.lon) {
+        if (cities.length > 1) {
+          const nextCity = cities[0];
+          loadWeather(nextCity.lat, nextCity.lon, nextCity.placeName);
+        }
+      }
+    }
+  });
+}
+
 // Enable button after page load
 els.getLocationBtn.disabled = false;
+
+updateCityDropdown();
 
 if (loadSavedLocation()) {
   setStatus("موقعیت ذخیره شده", lastPlaceName, "📍");
